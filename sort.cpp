@@ -35,21 +35,14 @@ void pSort::init()
 
 int pSort::sort(pSort::dataType** rbuf, long* l, pSort::SortType type)	//=> *l, l= &ndata;   
 {
-	//pSort::dataType
-	//omp_set_num_threads(3);
-	int procs = 20;  // omp_get_num_procs();
-	
-	//std::cout<< " leng is " << *l;
-	//std::cout << " rbuf " << rbuf<< " "<<*rbuf; // rbuf[0]->key << " " << (*rbuf + 1)->key;
-	//std::cout << " thisis " <<(*rbuf+1)->payload;
 
+	int procs = 20;  
 	if (type == 1)
 	{
 #pragma omp parallel num_threads(procs)
 		{	
 #pragma omp single 
 			{
-				//std::cout << " for sorting";
 				QUICk(*rbuf, 0, (*l) - 1);
 			}
 		}
@@ -63,7 +56,6 @@ int pSort::sort(pSort::dataType** rbuf, long* l, pSort::SortType type)	//=> *l, 
 #pragma omp single
 			{
 				QUICk3(*rbuf, 0, *l - 1);
-				//MERGe(*rbuf, *l);
 			}
 
 		}
@@ -75,10 +67,7 @@ int pSort::sort(pSort::dataType** rbuf, long* l, pSort::SortType type)	//=> *l, 
 	{
 		mergeSort(*rbuf, *l);
 	}
-	//std::cout << " sorting done";
-	
-	//to distribute data for globally sorted list
-	//std::cout << " goin for redis ";
+
 	for (int i = 0; i < size; i++)
 	{
 		if (rank == i)
@@ -87,8 +76,6 @@ int pSort::sort(pSort::dataType** rbuf, long* l, pSort::SortType type)	//=> *l, 
 		}
 	}
 	
-
-	//delete[] * rbuf;
 	*rbuf = f_buf;
 	*l = offset;
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -168,7 +155,6 @@ void QUICK2(pSort::dataType* rbuf, long ll)  //leng is the
 	{
 		if (rank == i)		//processes send their pivots to P0
 		{
-			//free(pivots_recvd);
 			MPI_Send(local_indices, size, MPI_LONG, 0, 2, MPI_COMM_WORLD);
 
 		}
@@ -270,8 +256,6 @@ void QUICK33(long* recvd_indices, pSort::dataType* rbuf, long count) //count is 
 
 				if ((i < rem && c > count) || (i >= rem && c > (count - 1)))	//last part not found, end of items
 				{
-					//std::cout << "\n last part not found " << std::endl;
-					//inter = nullptr; 
 					send_count = 0;
 				}
 
@@ -280,13 +264,11 @@ void QUICK33(long* recvd_indices, pSort::dataType* rbuf, long count) //count is 
 					if (i < rem)
 					{
 						send_count = count + 1 - c;
-						//std::cout << " \n extended < rem" << send_count;
 
 					}
 					else
 					{
 						send_count = count - c;
-						//std::cout << " \n extended " << send_count;
 					}
 				}
 				else
@@ -299,14 +281,12 @@ void QUICK33(long* recvd_indices, pSort::dataType* rbuf, long count) //count is 
 						}
 						if (rbuf[c].key <= recvd_indices[j])	//c will determine the partition count
 						{
-							//std::cout << "\n found for it " <<j<< " " << rbuf[c].key;
 							c++;
 							send_count++;
 
 						}
 						else
 						{
-							//std::cout << "\n send count for j " <<j<< " " << send_count << std::endl;
 							break;
 						}
 					}
@@ -317,13 +297,11 @@ void QUICK33(long* recvd_indices, pSort::dataType* rbuf, long count) //count is 
 				for (long g = 0; g < send_count; g++)		//copy the partition to send fwd
 				{
 
-					//memcpy(inter + g, rbuf + begin + g, sizeof(inter));
 					inter[g].key = rbuf[begin + g].key;
 					for (int ii = 0; ii < LOADSIZE; ii++)
 					{
 						inter[g].payload[ii] = rbuf[g+begin].payload[ii];
 					}
-					//std::cout << " memcpy of" << inter[g].key << " " <<inter[g].payload[0]<<inter[g].payload[1]<<inter[g].payload[2]<< " rank " << j; // --working correctly
 				}
 
 				if (rank == j)
@@ -332,13 +310,11 @@ void QUICK33(long* recvd_indices, pSort::dataType* rbuf, long count) //count is 
 					{
 						for (long r = 0; r < send_count; r++)   //to self
 						{
-							//std::memcpy(f_buf + r + offset, rbuf + begin + r, sizeof(f_buf));
 							f_buf[r+offset].key = rbuf[begin + r].key;
 							for (int ii = 0; ii < LOADSIZE; ii++)
 							{
 								f_buf[r+offset].payload[ii] = rbuf[r + begin].payload[ii];
 							}
-							//std::cout << " memcpy " << f_buf[r + offset].key << " " <<f_buf[r+offset].payload[0]<<f_buf[r+offset].payload[1]<< " rank " << j;
 
 						}
 						offset += send_count;
@@ -349,7 +325,6 @@ void QUICK33(long* recvd_indices, pSort::dataType* rbuf, long count) //count is 
 				{
 					MPI_Send(inter, send_count, Type, j, i, MPI_COMM_WORLD);
 				}
-				//delete[] inter;
 			}
 
 		}
@@ -359,28 +334,12 @@ void QUICK33(long* recvd_indices, pSort::dataType* rbuf, long count) //count is 
 
 			MPI_Recv(f_buf + offset, (2 * count), Type, i, i, MPI_COMM_WORLD, &status);
 			MPI_Get_count(&status, Type, &add);
-			//std::cout << "received " << add << " indices of data by " << rank <<" from " << i <<" offset + add " << offset+add<< "\n";
 			offset += add;
 
 		}
 
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
-
-	/*for (int i = 0; i < size-1; i++)
-	{
-		if (rank == i)
-		{
-			std::cout << " for p" << rank <<" offset"<<offset<< std::endl;
-			for (long j = 0; j < offset; j++)
-			{
-				std::cout << f_buf[j].key << std::endl;
-			}
-		}
-	}*/
-
-
-	//*l = offset;
 
 	for (int i = 0; i < size; i++)
 	{
@@ -528,7 +487,6 @@ void merge(pSort::dataType* result, pSort::dataType* left, pSort::dataType* righ
 
 void MERGe(pSort::dataType* rbuf, long len)
 {
-	//std::cout << " in merge " << std::endl;
 	if (len <= 1)
 	{
 		return;
@@ -559,8 +517,6 @@ long min(long x, long y) { return (x < y) ? x : y; }
 
 void mergeSort(pSort::dataType *rbuf, long n)
 {
-	//int curr_size=1; 
-
 	long left_start=0;
 #pragma omp parallel num_threads(20) shared(left_start)
 	{
